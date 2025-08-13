@@ -1,0 +1,336 @@
+{
+  "name": "MAKERS-IA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "4cd50549-28fb-4df8-b219-70299bc0c531",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -208
+      ],
+      "webhookId": "makers-tech-chat"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": true,\n  \"response\": \"{{ $json.choices[0].message.content }}\",\n  \"timestamp\": \"{{ new Date().toISOString() }}\",\n  \"user_id\": {{ $('Chat Webhook').first().json.body.user_id || 1 }},\n  \"session_id\": \"{{ $('Chat Webhook').first().json.body.session_id || 'default' }}\",\n  \"recommendations\": {{ JSON.stringify($('Process Inventory & User Data').first().json.recommendations) }}\n}",
+        "options": {}
+      },
+      "id": "4a991d77-497a-4815-863f-cac81e922b96",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        880,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f2e5a7b8-a1b9-4d3c-8e6f-7d1a9b2c3d4e",
+        "options": {}
+      },
+      "name": "Recibir Mensaje de Chat",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        192
+      ],
+      "webhookId": "f2e5a7b8-a1b9-4d3c-8e6f-7d1a9b2c3d4e",
+      "id": "0e0c0360-7666-436a-8a5b-87525f4eba71"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json.body.message}}",
+              "operation": "contains",
+              "value2": "cuántos"
+            }
+          ]
+        }
+      },
+      "name": "Detectar Intención",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        112,
+        192
+      ],
+      "id": "e9a192ce-aa97-4bda-ac1e-2a4961567c9c"
+    },
+    {
+      "parameters": {
+        "url": "https://tu-backend-adonis.com/api/inventory/summary",
+        "options": {}
+      },
+      "name": "Llamar API Inventario",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        624,
+        64
+      ],
+      "id": "a481e848-d686-4e20-8d68-63c15e7a09eb"
+    },
+    {
+      "parameters": {
+        "url": "https://tu-backend-adonis.com/api/products/details?name={{ $json.body.product_name }}",
+        "options": {}
+      },
+      "name": "Llamar API Detalles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        416,
+        272
+      ],
+      "id": "cedd44a1-5b04-44a6-8587-8cbfd923a713"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json.data;\nconst responseText = `En este momento, tenemos ${data.total_computers} computadores; ${data.hp_count} son HP, ${data.dell_count} son Dell, y ${data.apple_count} son Apple. ¿Cuál te gustaría ver?`;\nreturn { response: responseText };"
+      },
+      "name": "Formatear Respuesta Inventario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        64
+      ],
+      "id": "f6200eb4-45c0-4172-b00c-e75491feea43"
+    },
+    {
+      "parameters": {
+        "jsCode": "const product = $json.data;\nconst responseText = `El computador ${product.name} tiene un precio de $${product.price}. Cuenta con las siguientes características: ${product.features}.`;\nreturn { response: responseText };"
+      },
+      "name": "Formatear Respuesta Detalles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        272
+      ],
+      "id": "b6e1a59c-c1f5-45ea-bf3e-0a41f7ae1cb1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=## Rol y Personalidad ⚡\nTú eres Sparky, el asesor de ventas experto y amigable de Makers Tech, una tienda online de productos tecnológicos de alta calidad. Tu personalidad es entusiasta, servicial y proactiva. No eres un robot frío; eres un apasionado de la tecnología y tu misión es ayudar a los clientes a encontrar exactamente lo que necesitan, haciendo que su experiencia de compra sea fácil y agradable. Trata a cada cliente con paciencia y claridad.\n\n## Contexto y Objetivo 🎯\nEl usuario es un cliente que ha entrado a la tienda online de Makers Tech. Puede que esté buscando algo específico o simplemente explorando.\n\nTu objetivo principal es guiar al cliente a través de nuestro catálogo para que encuentre el producto perfecto para sus necesidades. Debes responder a sus preguntas, ofrecerle recomendaciones personalizadas y, en última instancia, ayudarle a tomar una decisión de compra informada y segura.\n\n## Capacidades y Herramientas 🛠️\nPara cumplir tu objetivo, tienes acceso en tiempo real a la información de la tienda a través de nuestra API interna. Puedes:\n\nConsultar Inventario: Tienes la capacidad de saber cuántas unidades de cada producto y marca están disponibles.\n\nObtener Detalles de Productos: Puedes acceder a descripciones completas, especificaciones técnicas (RAM, procesador, tamaño de pantalla, etc.) y precios de cualquier producto.\n\nComparar Productos: Puedes poner dos o más productos uno al lado del otro y resaltar sus diferencias clave para ayudar al cliente a decidir.\n\nHacer Recomendaciones: Basándote en las necesidades que el cliente te describa (ej: \"busco un portátil ligero para la universidad\"), puedes sugerir los 1 o 2 productos más adecuados de nuestro catálogo.\n\n## Reglas y Limitaciones ⛔\nEs crucial que sigas estas reglas en todo momento:\n\nSé siempre veraz: Nunca inventes productos, características, precios o niveles de stock. Si no tienes una información, admite que necesitas consultarla.\n\nMantente en el rol: Eres Sparky de Makers Tech. No hables de otras tiendas ni de productos que no vendemos.\n\nSé proactivo: No te limites a responder preguntas. Si un cliente pregunta por el stock de portátiles, responde y luego pregunta: \"¿Hay alguna marca o característica en particular que te interese para ayudarte a elegir?\".\n\nLenguaje claro y sencillo: Evita el exceso de jerga técnica. Si usas un término como \"SSD\", explica brevemente lo que significa (\"un disco de estado sólido, que hace que el ordenador sea mucho más rápido\").\n\nNo manejes datos sensibles: Nunca pidas contraseñas, información de tarjetas de crédito o datos personales. Si el cliente quiere comprar, guíalo hacia el botón de \"Añadir al carrito\" o \"Finalizar compra segura\".\n\nSé conciso: Da respuestas completas pero directas. Evita los párrafos demasiado largos.\n\n## Ejemplo de Interacción Ideal ✅\nSparky: \"¡Hola! 👋 Soy Sparky, tu asesor experto en tecnología de Makers Tech. ¡Qué bueno verte por aquí! ¿Hay algo en particular que estés buscando hoy o simplemente estás explorando?\"\n\nCliente: \"Hola, necesito un portátil nuevo.\"\n\nSparky: \"¡Estupendo! Estás en el lugar indicado. Para poder recomendarte el mejor, ¿podrías contarme un poco para qué lo usarás principalmente? ¿Es para trabajar, estudiar, jugar o quizás un poco de todo?\"\n\nCliente: \"Para la universidad, sobre todo. Necesito que sea ligero y que la batería dure.\"\n\nSparky: \"Entendido. En ese caso, te recomiendo dos opciones excelentes. El Apple MacBook Air es increíblemente ligero y su batería dura todo el día, ideal para llevarlo a clase. Otra gran opción es el HP Spectre x360, que también es muy liviano y te da la flexibilidad de una pantalla táctil. Actualmente tenemos 22 unidades del HP y 30 del MacBook Air. ¿Te gustaría que te diera más detalles de alguno de los dos?\"\n\n#PETICIONES DONDE PUEDES REALIZAR LAS CONSULTAS:\nURL BASE: http://localhost:3333/api/v1\n// Ejemplos de uso:\n// GET /products/search?q=dell\n// GET /products/search?brand=dell&category=laptop\n// GET /products/by-brand/dell\n// GET /products/by-brand/hp\n\n#MENSAJE A RESPONDER\n{{ $json.body.message }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -576,
+        192
+      ],
+      "id": "21729844-4c4e-46a7-9c3d-fd1779865a97",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        400
+      ],
+      "id": "9bc123af-a4c2-410c-abf3-4d7a6397b321",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "lBlJeexr2DYsgBa4",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Recibir Mensaje de Chat').first().json.body.session_id || $('Recibir Mensaje de Chat').first().json.body.user_id || 'default-session' }}",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -496,
+        416
+      ],
+      "id": "07cec60e-0c65-4c20-bed1-fef4e1b5fa51",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Hace una petición HTTP que consulta el resumen de la información que hay en este formato:\n{\n    \"total_products\": 4,\n    \"dell_count\": 2,\n    \"hp_count\": 1,\n    \"apple_count\": 1\n}\n\nla idea es que muestres la cantidad de productos que hay, si no los hay, no hacer ninguna petición y decir que ese producto NO lo tenemos y volver a ofrecer los que sí",
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -272,
+        384
+      ],
+      "id": "d5163007-a79b-49b1-afd1-c99ece096c31",
+      "name": "Peticion resumen inventario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3333/api/v1/chat/receive",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -224,
+        225.38712366938674
+      ],
+      "id": "769d3a78-2754-4cb2-b106-9af0fc94784a",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recibir Mensaje de Chat": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar Intención": {
+      "main": [
+        [
+          {
+            "node": "Llamar API Inventario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Llamar API Inventario": {
+      "main": [
+        [
+          {
+            "node": "Formatear Respuesta Inventario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Llamar API Detalles": {
+      "main": [
+        [
+          {
+            "node": "Formatear Respuesta Detalles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Peticion resumen inventario": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "240f178c-3cbe-4fe9-bfd2-d2528a425350",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9d0ad981c77c305f4b6d9175c730e87c60558b68ae40f554894922c86a0fa30c"
+  },
+  "id": "RCwvJkIfkVfkEqgE",
+  "tags": []
+}

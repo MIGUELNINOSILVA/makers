@@ -1,0 +1,51 @@
+ /* Aplicar la fuente Inter como predeterminada */
+ body {
+     font-family: 'Inter', sans-serif;
+     -webkit-font-smoothing: antialiased;
+     -moz-osx-font-smoothing: grayscale;
+ }
+
+ /* Estilo para una transición suave entre vistas y modales */
+ .view-transition {
+     transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
+ }
+
+ .view-hidden {
+     opacity: 0;
+     transform: translateY(10px);
+     pointer-events: none;
+ }
+
+ /* Estilo para el fondo del login */
+ .login-bg {
+     background-color: #f8fafc;
+     background-image:
+         radial-gradient(circle at 1px 1px, #e2e8f0 1px, transparent 0),
+         radial-gradient(circle at 15px 15px, #e2e8f0 1px, transparent 0);
+     background-size: 30px 30px;
+ }
+
+ /* Animación para el spinner */
+ @keyframes spin {
+     to {
+         transform: rotate(360deg);
+     }
+ }
+
+ .spinner {
+     animation: spin 1s linear infinite;
+ }
+
+ /* Estilo para el sidebar activo */
+ .sidebar-link-active {
+     background-color: #4f46e5;
+     /* indigo-600 */
+     color: white;
+     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+ }
+
+ /* Efecto hover en tarjetas */
+ .stat-card:hover {
+     transform: translateY(-5px);
+     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+ }
