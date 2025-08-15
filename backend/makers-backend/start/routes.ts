@@ -12,6 +12,7 @@ import ProductsController from '#controllers/products_controller'
 import router from '@adonisjs/core/services/router'
 import transmit from '@adonisjs/transmit/services/main'
 
+transmit.registerRoutes();
 
 router.group(() => {
   router.resource('/products', ProductsController)
@@ -24,9 +25,5 @@ router.group(() => {
   router.post('/chat/send', [ChatsController, 'sendMessage'])
   router.post('/chat/receive', [ChatsController, 'receiveFromN8N']) // Para N8N
   router.post('/chat/disconnect', [ChatsController, 'disconnect'])
-
-
-  router.get('/chat/stream', ({ request, response }) => {
-    return transmit.registerRoutes(request, response)
-  })
+  
 }).prefix('/api/v1')

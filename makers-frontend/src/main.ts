@@ -4,6 +4,7 @@ import './assets/styles.css'
 
 import App from './App.vue'
 import router from './router'
+import './config/axios'
 
 const app = createApp(App)
 

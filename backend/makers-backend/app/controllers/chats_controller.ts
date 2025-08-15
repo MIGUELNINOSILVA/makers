@@ -1,149 +1,168 @@
+// app/controllers/chats_controller.ts
+
+import env from '#start/env'
 import type { HttpContext } from '@adonisjs/core/http'
 import transmit from '@adonisjs/transmit/services/main'
 import axios from 'axios'
 
 export default class ChatsController {
-
-    /**
-       * Manejar conexión WebSocket
-       */
-    public async connect({ request, response }: HttpContext) {
-        // 1. Obtenemos los datos de la petición.
+    public async connect({ request }: HttpContext) {
         const userId = request.input('user_id') || 'anonymous'
         const sessionId = request.input('session_id') || `session-${userId}-${Date.now()}`
 
-        // 2. No es necesario llamar a `transmit.authorize()`. 
-        //    La autorización ya ocurrió automáticamente gracias a tu archivo `config/transmit.ts`.
-
-        // 3. Simplemente enviamos el mensaje de bienvenida al canal correcto.
-        //    Añadimos de nuevo el nombre del evento 'connection_established'.
-        transmit.broadcast(`chat_${sessionId}`, 'connection_established', {
-            message: '¡Hola! Soy Sparky, tu asesor de Makers Tech. ¿En qué puedo ayudarte hoy? 🚀',
+        transmit.broadcast(`chat_${sessionId}`, {
+            event: 'connection_established',
             timestamp: new Date().toISOString(),
-            type: 'system'
+            type: 'system',
         })
 
-        // 4. Devolvemos el session_id para que el cliente lo use.
         return { success: true, session_id: sessionId }
     }
 
-    /**
-   * Recibir mensaje del cliente y enviarlo a N8N
-   */
     public async sendMessage({ request }: HttpContext) {
-        const { message, user_id, session_id } = request.only(['message', 'user_id', 'session_id'])
+        const { message, user_id, session_id } = request.only(['message', 'user_id', 'session_id']);
 
         if (!message || !session_id) {
-            return { error: 'Mensaje y session_id son requeridos' }
+            return { error: 'Mensaje y session_id son requeridos' };
         }
 
-        try {
-            // 1. Mostrar "escribiendo..." al cliente
-            transmit.broadcast(`chat_${session_id}`, 'typing', {
-                typing: true,
-                timestamp: new Date().toISOString()
-            })
-
-            // 2. Enviar el mensaje del usuario de vuelta (confirmación)
-            transmit.broadcast(`chat_${session_id}`, 'user_message', {
-                message,
-                timestamp: new Date().toISOString(),
-                type: 'user',
-                user_id
-            })
-
-            // 3. Enviar a N8N webhook
-            const n8nResponse = await axios.post('http://localhost:5678/webhook/f2e5a7b8-a1b9-4d3c-8e6f-7d1a9b2c3d4e', {
-                message,
-                user_id: user_id || 1,
-                session_id,
-                timestamp: new Date().toISOString()
-            }, {
-                timeout: 30000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-
-            // 4. Quitar "escribiendo..."
-            transmit.broadcast(`chat_${session_id}`, 'typing', {
-                typing: false,
-                timestamp: new Date().toISOString()
-            })
-
-            // 5. Enviar respuesta de la IA al cliente
-            if (n8nResponse.data && n8nResponse.data.response) {
-                transmit.broadcast(`chat_${session_id}`, 'ai_message', {
-                    message: n8nResponse.data.response,
-                    timestamp: new Date().toISOString(),
-                    type: 'assistant',
-                    recommendations: n8nResponse.data.recommendations || []
-                })
-            }
-
-            return {
-                success: true,
-                message: 'Mensaje enviado correctamente'
-            }
-
-        } catch (error) {
-            console.error('Error sending message to N8N:', error)
-
-            // Quitar "escribiendo..." en caso de error
-            transmit.broadcast(`chat_${session_id}`, 'typing', {
-                typing: false,
-                timestamp: new Date().toISOString()
-            })
-
-            // Enviar mensaje de error al cliente
-            transmit.broadcast(`chat_${session_id}`, 'error_message', {
-                message: 'Lo siento, hubo un problema técnico. Por favor intenta de nuevo.',
-                timestamp: new Date().toISOString(),
-                type: 'error'
-            })
-
-            return {
-                success: false,
-                error: 'Error procesando el mensaje'
-            }
-        }
-    }
-
-    /**
-     * Endpoint para que N8N envíe respuestas directamente (alternativo)
-     */
-    public async receiveFromN8N({ request }: HttpContext) {
-        const { session_id, message, type, user_id } = request.only(['session_id', 'message', 'type', 'user_id'])
-
-        if (!session_id || !message) {
-            return { error: 'session_id y message son requeridos' }
-        }
-
-        // Enviar mensaje al cliente específico
-        transmit.broadcast(`chat_${session_id}`, 'ai_message', {
+        // 1. Notifica al frontend que el usuario envió un mensaje
+        transmit.broadcast(`chat_${session_id}`, {
+            event: 'user_message',
             message,
             timestamp: new Date().toISOString(),
-            type: type || 'assistant',
-            user_id
-        })
+            type: 'user',
+            user_id,
+        });
 
-        return { success: true }
+        // 2. Notifica al frontend que la IA está "escribiendo"
+        transmit.broadcast(`chat_${session_id}`, {
+            event: 'typing',
+            typing: true,
+            timestamp: new Date().toISOString(),
+        });
+
+        // 3. Envía la petición a n8n pero NO la esperes (sin await)
+        axios.post(env.get('N8N_URL'), {
+            message,
+            user_id: user_id || 1,
+            session_id,
+            timestamp: new Date().toISOString(),
+        }).catch(error => {
+            console.error('Error al contactar n8n:', error.message);
+            transmit.broadcast(`chat_${session_id}`, {
+                event: 'error_message',
+                message: 'El asistente no pudo procesar tu solicitud. Intenta de nuevo.',
+                timestamp: new Date().toISOString(),
+                type: 'error',
+            });
+            transmit.broadcast(`chat_${session_id}`, {
+                event: 'typing',
+                typing: false,
+                timestamp: new Date().toISOString(),
+            });
+        });
+
+        return { success: true, message: 'Mensaje enviado a procesar' };
     }
 
-    /**
-     * Desconectar usuario
-     */
-    public async disconnect({ request }: HttpContext) {
-        const { session_id } = request.only(['session_id'])
-
-        if (session_id) {
-            transmit.broadcast(`chat_${session_id}`, 'user_disconnected', {
-                message: 'Usuario desconectado',
-                timestamp: new Date().toISOString(),
-                type: 'system'
-            })
+    // Función para formatear el mensaje de N8N
+    private formatMessage(rawMessage: string) {
+        // Detectar y procesar productos en formato lista
+        const productPattern = /(\d+)\.\s\*\*(.*?)\*\*\s*-\s\*\*Descripción\*\*:\s*(.*?)\.\s*-\s\*\*Precio\*\*:\s*\$([\d,]+\.?\d*)\s*-\s\*\*Stock\*\*:\s*(\d+)\s*unidades?\s*disponibles?/gi;
+        
+        // Extraer productos
+        const products = [];
+        let match;
+        while ((match = productPattern.exec(rawMessage)) !== null) {
+            products.push({
+                id: parseInt(match[1]),
+                name: match[2],
+                description: match[3],
+                price: parseFloat(match[4].replace(',', '')),
+                stock: parseInt(match[5])
+            });
         }
 
+        // Extraer categorías
+        const categoryPattern = /###\s*(.*?):/g;
+        const categories = [];
+        let categoryMatch;
+        while ((categoryMatch = categoryPattern.exec(rawMessage)) !== null) {
+            categories.push(categoryMatch[1]);
+        }
+
+        // Extraer texto introductorio y final
+        const introPattern = /^(.*?)(?=###|$)/s;
+        const introMatch = rawMessage.match(introPattern);
+        const intro = introMatch ? introMatch[1].trim() : '';
+
+        const outroPattern = /¿.*?😊/s;
+        const outroMatch = rawMessage.match(outroPattern);
+        const outro = outroMatch ? outroMatch[0] : '';
+
+        return {
+            type: 'formatted_response',
+            intro: intro.replace(/[#*]/g, ''),
+            categories,
+            products,
+            outro,
+            raw_message: rawMessage
+        };
+    }
+
+    public async receiveFromN8N({ request }: HttpContext) {
+        const { session_id, message, recommendations = [] } = request.only(['session_id', 'message', 'recommendations']);
+
+        if (!session_id || !message) {
+            return { error: 'session_id y message son requeridos' };
+        }
+
+        // Detiene el indicador de "escribiendo"
+        transmit.broadcast(`chat_${session_id}`, {
+            event: 'typing',
+            typing: false,
+            timestamp: new Date().toISOString(),
+        });
+
+        // Formatear el mensaje si contiene productos
+        const isProductList = message.includes('**Descripción**') && message.includes('**Precio**') && message.includes('**Stock**');
+        
+        if (isProductList) {
+            const formattedData = this.formatMessage(message);
+            
+            transmit.broadcast(`chat_${session_id}`, {
+                event: 'ai_message_formatted',
+                data: formattedData,
+                timestamp: new Date().toISOString(),
+                type: 'assistant',
+                recommendations
+            });
+        } else {
+            // Mensaje normal sin formateo especial
+            transmit.broadcast(`chat_${session_id}`, {
+                event: 'ai_message',
+                message,
+                timestamp: new Date().toISOString(),
+                type: 'assistant',
+                recommendations
+            });
+        }
+
+        console.log(`Mensaje enviado al canal chat_${session_id}`);
+        return { success: true };
+    }
+
+    public async disconnect({ request }: HttpContext) {
+        const { session_id } = request.only(['session_id'])
+        if (session_id) {
+            transmit.broadcast(`chat_${session_id}`, {
+                event: 'user_disconnected',
+                message: 'Usuario desconectado',
+                timestamp: new Date().toISOString(),
+                type: 'system',
+            })
+        }
         return { success: true }
     }
 }

@@ -30,15 +30,67 @@
 
             <!-- Messages Area -->
             <div ref="messagesContainer" class="flex-1 p-4 overflow-y-auto space-y-4">
-                <div v-for="message in messages" :key="message.id" class="flex"
-                    :class="message.sender === 'user' ? 'justify-end' : 'justify-start'">
-                    <div class="max-w-[80%] px-4 py-2 rounded-2xl" :class="{
-                        'bg-indigo-600 text-white rounded-br-lg': message.sender === 'user',
-                        'bg-gray-200 text-gray-800 rounded-bl-lg': message.sender === 'ai'
-                    }">
-                        <p class="text-sm">{{ message.text }}</p>
+                <div v-for="(message, index) in messages" :key="index" class="flex"
+                    :class="message.type === 'user' ? 'justify-end' : 'justify-start'">
+
+                    <!-- Mensaje normal -->
+                    <div v-if="message.format_type !== 'formatted_response'" class="max-w-[80%] px-4 py-2 rounded-2xl"
+                        :class="{
+                            'bg-indigo-600 text-white rounded-br-lg': message.type === 'user',
+                            'bg-gray-200 text-gray-800 rounded-bl-lg': message.type === 'assistant',
+                            'bg-yellow-100 text-yellow-800 rounded-lg text-center w-full': message.type === 'system',
+                            'bg-red-100 text-red-800 rounded-lg': message.type === 'error'
+                        }">
+                        <p class="text-sm">{{ message.message }}</p>
+                    </div>
+
+                    <!-- Mensaje de productos formateado -->
+                    <div v-else class="w-full max-w-full">
+                        <div class="bg-gray-50 rounded-2xl p-4 space-y-4">
+                            <!-- Texto introductorio -->
+                            <div v-if="message.data.intro" class="text-sm text-gray-700 mb-3">
+                                {{ message.data.intro }}
+                            </div>
+
+                            <!-- Productos por categoría -->
+                            <div v-for="category in message.data.categories" :key="category" class="space-y-3">
+                                <h3 class="font-bold text-indigo-600 text-sm border-b border-indigo-200 pb-1">
+                                    {{ category }}
+                                </h3>
+
+                                <div class="space-y-2">
+                                    <div v-for="product in getProductsByCategory(category, message.data.products)"
+                                        :key="product.id"
+                                        class="bg-white rounded-lg p-3 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <h4 class="font-semibold text-gray-800 text-sm">{{ product.name }}</h4>
+                                            <span class="text-lg font-bold text-green-600">${{
+                                                formatPrice(product.price) }}</span>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mb-2">{{ product.description }}</p>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-xs"
+                                                :class="product.stock > 10 ? 'text-green-600' : product.stock > 0 ? 'text-yellow-600' : 'text-red-600'">
+                                                {{ product.stock }} disponibles
+                                            </span>
+                                            <button
+                                                class="bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700 transition-colors">
+                                                Ver más
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Texto de cierre -->
+                            <div v-if="message.data.outro"
+                                class="text-sm text-gray-700 mt-4 pt-3 border-t border-gray-200">
+                                {{ message.data.outro }}
+                            </div>
+                        </div>
                     </div>
                 </div>
+
                 <!-- Typing Indicator -->
                 <div v-if="isLoading" class="flex justify-start">
                     <div
@@ -89,6 +141,9 @@
 </template>
 
 <script>
+import axios from 'axios';
+import { transmit } from '../services/transmit';
+
 export default {
     name: "ChatWidget",
     data() {
@@ -96,80 +151,240 @@ export default {
             isOpen: false,
             isLoading: false,
             newMessage: "",
-            messages: [
-                { id: 1, text: "¡Hola! Soy tu asistente de IA. ¿En qué puedo ayudarte hoy?", sender: "ai" }
-            ],
+            messages: [],
+            sessionId: null,
+            subscription: null,
         };
     },
+
+    async beforeDestroy() {
+        // Limpia la suscripción cuando el componente se destruye
+        if (this.subscription) {
+            try {
+                await this.subscription.delete();
+                console.log('[Transmit] Suscripción eliminada correctamente');
+            } catch (error) {
+                console.error('[Transmit] Error al eliminar suscripción:', error);
+            }
+        }
+    },
+
     methods: {
+        // Método para formatear precios
+        formatPrice(price) {
+            return new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(price);
+        },
+
+        // Método para obtener productos por categoría
+        getProductsByCategory(category, products) {
+            // Por simplicidad, asignamos productos basado en su ID
+            // En tu caso real, podrías tener un campo category en el producto
+            if (category === 'Portátiles') {
+                return products.filter(p => p.id <= 3);
+            } else if (category === 'Monitores') {
+                return products.filter(p => p.id > 3);
+            }
+            return products;
+        },
+
         toggleChat() {
             this.isOpen = !this.isOpen;
+            // Si abrimos el chat y aún no estamos conectados, iniciamos la conexión.
+            if (this.isOpen && !this.sessionId) {
+                this.connect();
+            }
         },
+
+        async connect() {
+            this.isLoading = true;
+            try {
+                const response = await axios.post('/api/v1/chat/connect');
+                if (response.data.success) {
+                    this.sessionId = response.data.session_id;
+
+                    console.log("📡 Session ID recibido:", this.sessionId);
+
+                    // Mensaje de bienvenida local
+                    this.messages.push({
+                        type: 'assistant',
+                        message: '¡Hola! Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?'
+                    });
+                    this.scrollToBottom();
+
+                    // Suscribirse al canal usando la API correcta
+                    const channelName = `chat_${this.sessionId}`;
+                    console.log("📡 Iniciando suscripción al canal:", channelName);
+                    await this.subscribeToChannel(channelName);
+                }
+            } catch (error) {
+                console.error("Error al conectar con el servidor de chat:", error);
+                this.messages.push({
+                    type: 'error',
+                    message: 'No se pudo conectar con el asistente. Inténtalo de nuevo.'
+                });
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        async subscribeToChannel(channelName) {
+            if (!channelName) {
+                console.error("[Transmit] ❌ No se pasó channelName");
+                return;
+            }
+
+            try {
+                console.log(`[Transmit] 🔗 Creando suscripción al canal: ${channelName}`);
+
+                // Crear la suscripción usando la API correcta de Transmit
+                const subscription = transmit.subscription(channelName);
+
+                // Configurar el listener para mensajes ANTES de crear la suscripción
+                subscription.onMessage((data) => {
+                    console.log(`[Transmit] 📩 Mensaje recibido en ${channelName}:`, data);
+                    this.handleTransmitMessage(data);
+                });
+
+                // Configurar el listener para errores (si está disponible)
+                if (subscription.onError) {
+                    subscription.onError((error) => {
+                        console.error(`[Transmit] ❌ Error en suscripción ${channelName}:`, error);
+                        this.messages.push({
+                            type: 'error',
+                            message: 'Error de conexión en tiempo real'
+                        });
+                        this.scrollToBottom();
+                    });
+                }
+
+                // Crear la suscripción en el servidor - ESTO inicia la conexión SSE
+                console.log(`[Transmit] 📡 Registrando suscripción en el servidor...`);
+                await subscription.create();
+
+                // Guardar referencia de la suscripción
+                this.subscription = subscription;
+
+                console.log(`[Transmit] ✅ Suscripción creada exitosamente: ${channelName}`);
+
+                // Mensaje de confirmación
+                this.messages.push({
+                    type: 'system',
+                    message: '🔗 Conectado en tiempo real'
+                });
+                this.scrollToBottom();
+
+            } catch (error) {
+                console.error(`[Transmit] ❌ Error al crear suscripción:`, error);
+                this.messages.push({
+                    type: 'error',
+                    message: 'Conexión en tiempo real no disponible. El chat funciona normalmente.'
+                });
+                this.scrollToBottom();
+            }
+        },
+
+        handleTransmitMessage(data) {
+            console.log("[Transmit] Procesando mensaje:", data);
+
+            // Si el mensaje tiene estructura de evento
+            if (data && typeof data === 'object' && data.event) {
+                switch (data.event) {
+                    case 'connection_established':
+                        console.log('[Transmit] Conexión establecida confirmada');
+                        break;
+
+                    case 'ai_message':
+                        this.messages.push({
+                            type: 'assistant',
+                            message: data.message
+                        });
+                        this.scrollToBottom();
+                        break;
+
+                    case 'ai_message_formatted':
+                        // NUEVO: Manejo de mensajes formateados con productos
+                        this.messages.push({
+                            type: 'assistant',
+                            format_type: 'formatted_response',
+                            data: data.data,
+                            recommendations: data.recommendations || []
+                        });
+                        this.scrollToBottom();
+                        break;
+
+                    case 'user_message':
+                        console.log('[Transmit] Confirmación de mensaje de usuario');
+                        break;
+
+                    case 'error_message':
+                        this.messages.push({
+                            type: 'error',
+                            message: data.message
+                        });
+                        this.scrollToBottom();
+                        break;
+
+                    case 'typing':
+                        this.isLoading = data.typing || false;
+                        break;
+
+                    default:
+                        console.log('[Transmit] Evento desconocido:', data.event);
+                }
+            }
+            // Si el mensaje es directo (solo texto o mensaje simple)
+            else if (data && data.message) {
+                this.messages.push({
+                    type: 'assistant',
+                    message: data.message
+                });
+                this.scrollToBottom();
+            }
+            // Si es un mensaje plano (string)
+            else if (typeof data === 'string') {
+                this.messages.push({
+                    type: 'assistant',
+                    message: data
+                });
+                this.scrollToBottom();
+            }
+            else {
+                console.log('[Transmit] Formato de mensaje no reconocido:', data);
+            }
+        },
+
         async sendMessage() {
             if (!this.newMessage.trim() || this.isLoading) return;
 
-            const userMessage = {
-                id: Date.now(),
-                text: this.newMessage,
-                sender: "user",
-            };
-            this.messages.push(userMessage);
-            this.isLoading = true;
+            // Agregar mensaje del usuario localmente
+            this.messages.push({
+                type: 'user',
+                message: this.newMessage,
+            });
+
             const messageToSend = this.newMessage;
             this.newMessage = "";
             this.scrollToBottom();
 
             try {
-                const aiResponse = await this.callGeminiAPI(messageToSend);
-                this.messages.push({
-                    id: Date.now() + 1,
-                    text: aiResponse,
-                    sender: "ai",
+                // Enviar mensaje al backend
+                await axios.post('/api/v1/chat/send', {
+                    session_id: this.sessionId,
+                    message: messageToSend,
                 });
             } catch (error) {
+                console.error("Error al enviar el mensaje:", error);
                 this.messages.push({
-                    id: Date.now() + 1,
-                    text: "Lo siento, ocurrió un error. Por favor, inténtalo de nuevo.",
-                    sender: "ai",
+                    type: 'error',
+                    message: 'Tu mensaje no se pudo enviar. Por favor, inténtalo de nuevo.',
                 });
-            } finally {
-                this.isLoading = false;
                 this.scrollToBottom();
             }
         },
-        async callGeminiAPI(prompt) {
-            const apiKey = ""; // Canvas will provide this
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-            // Construimos un historial simple para dar contexto
-            const history = this.messages.map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text }]
-            }));
-
-            // El último mensaje del usuario no está en el historial todavía, lo añadimos
-            history.push({ role: 'user', parts: [{ text: prompt }] });
-
-            const payload = { contents: history };
-
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                throw new Error("Error en la llamada a la API de Gemini");
-            }
-
-            const result = await response.json();
-
-            if (result.candidates && result.candidates[0]) {
-                return result.candidates[0].content.parts[0].text;
-            }
-
-            return "No pude procesar esa respuesta.";
-        },
         scrollToBottom() {
             this.$nextTick(() => {
                 const container = this.$refs.messagesContainer;
@@ -181,7 +396,3 @@ export default {
     },
 };
 </script>
-
-<style scoped>
-/* Las animaciones y estilos ya están manejados con clases de Tailwind */
-</style>
