@@ -23,7 +23,7 @@ router.group(() => {
 
   router.post('/chat/connect', [ChatsController, 'connect'])
   router.post('/chat/send', [ChatsController, 'sendMessage'])
-  router.post('/chat/receive', [ChatsController, 'receiveFromN8N']) // Para N8N
+  router.post('/chat/receive', [ChatsController, 'receiveFromN8N']) // For N8N
   router.post('/chat/disconnect', [ChatsController, 'disconnect'])
-  
+
 }).prefix('/api/v1')

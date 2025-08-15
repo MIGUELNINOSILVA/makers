@@ -5,7 +5,7 @@ import { BaseSeeder } from '@adonisjs/lucid/seeders'
 
 export default class extends BaseSeeder {
   async run() {
-    // 1. Crear Marcas
+    // 1. Create Brands
     const brands = await Brand.createMany([
       { name: 'Dell', slug: 'dell' },
       { name: 'HP', slug: 'hp' },
@@ -13,26 +13,26 @@ export default class extends BaseSeeder {
       { name: 'Lenovo', slug: 'lenovo' },
     ])
 
-    // 2. Crear Categorías
+    // 2. Create Categories
     const categories = await Category.createMany([
-      { name: 'Portátiles', slug: 'portatiles' },
-      { name: 'Monitores', slug: 'monitores' },
-      { name: 'Accesorios', slug: 'accesorios' },
+      { name: 'Laptops', slug: 'laptops' },
+      { name: 'Monitors', slug: 'monitors' },
+      { name: 'Accessories', slug: 'accessories' },
     ])
 
-    // 3. Crear Productos, asociándolos a las marcas y categorías creadas
-    // Usamos los IDs de los registros que acabamos de crear
+    // 3. Create Products, associating them with the created brands and categories
+    // We use the IDs of the records we just created
     const dellBrandId = brands.find(b => b.name === 'Dell')!.id
     const hpBrandId = brands.find(b => b.name === 'HP')!.id
     const appleBrandId = brands.find(b => b.name === 'Apple')!.id
 
-    const laptopCategoryId = categories.find(c => c.name === 'Portátiles')!.id
-    const monitorCategoryId = categories.find(c => c.name === 'Monitores')!.id
+    const laptopCategoryId = categories.find(c => c.name === 'Laptops')!.id
+    const monitorCategoryId = categories.find(c => c.name === 'Monitors')!.id
 
     await Product.createMany([
       {
         name: 'Dell XPS 15',
-        description: 'Potente portátil para creadores de contenido.',
+        description: 'Powerful laptop for content creators.',
         price: 2199.99,
         sku: 'DELL-XPS15-9530',
         stockQuantity: 15,
@@ -41,7 +41,7 @@ export default class extends BaseSeeder {
       },
       {
         name: 'HP Spectre x360',
-        description: 'Diseño convertible 2-en-1 con pantalla táctil.',
+        description: '2-in-1 convertible design with a touchscreen.',
         price: 1549.50,
         sku: 'HP-SPX360-14',
         stockQuantity: 22,
@@ -50,7 +50,7 @@ export default class extends BaseSeeder {
       },
       {
         name: 'Apple MacBook Air M2',
-        description: 'Ultraligero y con una batería de larga duración.',
+        description: 'Ultralight and with a long-lasting battery.',
         price: 1299.00,
         sku: 'APP-MBA-M2-SLV',
         stockQuantity: 30,
@@ -58,8 +58,8 @@ export default class extends BaseSeeder {
         categoryId: laptopCategoryId,
       },
       {
-        name: 'Monitor Dell UltraSharp 27',
-        description: 'Monitor 4K con colores precisos para profesionales.',
+        name: 'Dell UltraSharp 27 Monitor',
+        description: '4K monitor with accurate colors for professionals.',
         price: 599.99,
         sku: 'DELL-U2723QE',
         stockQuantity: 40,

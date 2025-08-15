@@ -23,10 +23,10 @@ export default class ChatsController {
         const { message, user_id, session_id } = request.only(['message', 'user_id', 'session_id']);
 
         if (!message || !session_id) {
-            return { error: 'Mensaje y session_id son requeridos' };
+            return { error: 'Message and session_id are required' };
         }
 
-        // 1. Notifica al frontend que el usuario envió un mensaje
+        // 1. Notify the frontend that the user sent a message
         transmit.broadcast(`chat_${session_id}`, {
             event: 'user_message',
             message,
@@ -35,24 +35,24 @@ export default class ChatsController {
             user_id,
         });
 
-        // 2. Notifica al frontend que la IA está "escribiendo"
+        // 2. Notify the frontend that the AI is "typing"
         transmit.broadcast(`chat_${session_id}`, {
             event: 'typing',
             typing: true,
             timestamp: new Date().toISOString(),
         });
 
-        // 3. Envía la petición a n8n pero NO la esperes (sin await)
+        // 3. Send the request to n8n but DO NOT wait for it (no await)
         axios.post(env.get('N8N_URL'), {
             message,
             user_id: user_id || 1,
             session_id,
             timestamp: new Date().toISOString(),
         }).catch(error => {
-            console.error('Error al contactar n8n:', error.message);
+            console.error('Error contacting n8n:', error.message);
             transmit.broadcast(`chat_${session_id}`, {
                 event: 'error_message',
-                message: 'El asistente no pudo procesar tu solicitud. Intenta de nuevo.',
+                message: 'The assistant could not process your request. Please try again.',
                 timestamp: new Date().toISOString(),
                 type: 'error',
             });
@@ -63,15 +63,15 @@ export default class ChatsController {
             });
         });
 
-        return { success: true, message: 'Mensaje enviado a procesar' };
+        return { success: true, message: 'Message sent for processing' };
     }
 
-    // Función para formatear el mensaje de N8N
+    // Function to format the message from N8N
     private formatMessage(rawMessage: string) {
-        // Detectar y procesar productos en formato lista
-        const productPattern = /(\d+)\.\s\*\*(.*?)\*\*\s*-\s\*\*Descripción\*\*:\s*(.*?)\.\s*-\s\*\*Precio\*\*:\s*\$([\d,]+\.?\d*)\s*-\s\*\*Stock\*\*:\s*(\d+)\s*unidades?\s*disponibles?/gi;
+        // Detect and process products in list format
+        const productPattern = /(\d+)\.\s\*\*(.*?)\*\*\s*-\s\*\*Description\*\*:\s*(.*?)\.\s*-\s\*\*Price\*\*:\s*\$([\d,]+\.?\d*)\s*-\s\*\*Stock\*\*:\s*(\d+)\s*units?\s*available?/gi;
         
-        // Extraer productos
+        // Extract products
         const products = [];
         let match;
         while ((match = productPattern.exec(rawMessage)) !== null) {
@@ -84,7 +84,7 @@ export default class ChatsController {
             });
         }
 
-        // Extraer categorías
+        // Extract categories
         const categoryPattern = /###\s*(.*?):/g;
         const categories = [];
         let categoryMatch;
@@ -92,12 +92,12 @@ export default class ChatsController {
             categories.push(categoryMatch[1]);
         }
 
-        // Extraer texto introductorio y final
+        // Extract introductory and final text
         const introPattern = /^(.*?)(?=###|$)/s;
         const introMatch = rawMessage.match(introPattern);
         const intro = introMatch ? introMatch[1].trim() : '';
 
-        const outroPattern = /¿.*?😊/s;
+        const outroPattern = /¿.*?😊/s; // This regex might need adjustment based on the actual outro text
         const outroMatch = rawMessage.match(outroPattern);
         const outro = outroMatch ? outroMatch[0] : '';
 
@@ -115,18 +115,18 @@ export default class ChatsController {
         const { session_id, message, recommendations = [] } = request.only(['session_id', 'message', 'recommendations']);
 
         if (!session_id || !message) {
-            return { error: 'session_id y message son requeridos' };
+            return { error: 'session_id and message are required' };
         }
 
-        // Detiene el indicador de "escribiendo"
+        // Stops the "typing" indicator
         transmit.broadcast(`chat_${session_id}`, {
             event: 'typing',
             typing: false,
             timestamp: new Date().toISOString(),
         });
 
-        // Formatear el mensaje si contiene productos
-        const isProductList = message.includes('**Descripción**') && message.includes('**Precio**') && message.includes('**Stock**');
+        // Format the message if it contains products
+        const isProductList = message.includes('**Description**') && message.includes('**Price**') && message.includes('**Stock**');
         
         if (isProductList) {
             const formattedData = this.formatMessage(message);
@@ -139,7 +139,7 @@ export default class ChatsController {
                 recommendations
             });
         } else {
-            // Mensaje normal sin formateo especial
+            // Normal message without special formatting
             transmit.broadcast(`chat_${session_id}`, {
                 event: 'ai_message',
                 message,
@@ -149,7 +149,7 @@ export default class ChatsController {
             });
         }
 
-        console.log(`Mensaje enviado al canal chat_${session_id}`);
+        console.log(`Message sent to channel chat_${session_id}`);
         return { success: true };
     }
 
@@ -158,7 +158,7 @@ export default class ChatsController {
         if (session_id) {
             transmit.broadcast(`chat_${session_id}`, {
                 event: 'user_disconnected',
-                message: 'Usuario desconectado',
+                message: 'User disconnected',
                 timestamp: new Date().toISOString(),
                 type: 'system',
             })

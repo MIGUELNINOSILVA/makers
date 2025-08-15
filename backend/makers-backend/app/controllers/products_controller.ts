@@ -6,22 +6,19 @@ import { HttpContext } from "@adonisjs/core/http"
 export default class ProductsController {
 
     /**
-   * Muestra una lista de todos los productos.
-   * GET /products
-   */
+     * Displays a list of all products.
+     * GET /products
+     */
     public async index({ response }: HttpContext) {
-        // Usamos .preload() para traer también la marca y categoría de cada producto
         const products = await Product.query().preload('brand').preload('category').paginate(1, 10)
-
         return response.ok(products)
     }
 
     /**
-     * Muestra un único producto basado en su ID.
+     * Displays a single product based on its ID.
      * GET /products/:id
      */
     public async show({ params, response }: HttpContext) {
-        // .findOrFail() falla automáticamente con un error 404 si no encuentra el producto
         const product = await Product.query()
             .where('id', params.id)
             .preload('brand')
@@ -33,33 +30,27 @@ export default class ProductsController {
     }
 
     /**
-   * Lógica específica para el resumen que necesita el chatbot.
-   * GET /inventory/summary
-   */
+     * Specific logic for the inventory summary needed by the chatbot.
+     * GET /inventory/summary
+     */
     public async getInventorySummary({ response }: HttpContext) {
-        // 1. Obtener el conteo total de productos en una sola consulta.
         const totalResult = await Product.query().count('* as total')
         const totalProducts = totalResult[0].$extras.total
 
-        // 2. Obtener el conteo de productos por cada marca en una sola consulta.
-        // Esto es equivalente a un "GROUP BY" en SQL.
         const countsByBrand = await Product.query()
             .select('brand_id')
             .count('* as count')
             .groupBy('brand_id')
             .preload('brand')
 
-        // 3. Construir el objeto de respuesta dinámicamente.
         const summary = countsByBrand.reduce((acc, entry) => {
-            // Si la marca existe y tiene un nombre, se crea la clave dinámicamente.
             if (entry.brand) {
                 const brandKey = `${entry.brand.name.toLowerCase()}_count`
                 acc[brandKey] = entry.$extras.count
             }
             return acc
-        }, {} as Record<string, number>) // El objeto inicial está vacío
+        }, {} as Record<string, number>)
 
-        // 4. Unir el total con los conteos por marca.
         const finalResponse = {
             total_products: totalProducts,
             ...summary,
@@ -69,78 +60,96 @@ export default class ProductsController {
     }
 
     /**
-     * Busca productos por nombre de marca o modelo específico.
-     * GET /products/search?brand=dell&model=inspiron (opcional)
-     * GET /products/search?q=dell (búsqueda general)
+     * Searches for products with advanced filters, including attributes.
+     * GET /products/search?q=laptop
+     * GET /products/search?brand=dell&category=laptop
+     * GET /products/search?attributes=RAM:16GB,Processor:i7
      */
     public async search({ request, response }: HttpContext) {
-        const { brand, model, q, category } = request.qs()
+        // ADJUSTMENT: Added 'attributes' parameter to filter by variants.
+        const { brand, model, q, category, attributes } = request.qs()
 
         let query = Product.query()
             .preload('brand')
             .preload('category')
             .preload('attributes')
 
-        // Si hay una búsqueda general (q), buscar en múltiples campos
+        // General search filter (q)
         if (q) {
-            const searchTerm = q.toLowerCase().trim()
-
-            query = query.where((subQuery) => {
+            const searchTerm = `%${q.toLowerCase().trim()}%`
+            query.where((subQuery) => {
                 subQuery
-                    .whereRaw('LOWER(name) LIKE ?', [`%${searchTerm}%`])
-                    .orWhereRaw('LOWER(description) LIKE ?', [`%${searchTerm}%`])
+                    .whereRaw('LOWER(name) LIKE ?', [searchTerm])
+                    .orWhereRaw('LOWER(description) LIKE ?', [searchTerm])
                     .orWhereHas('brand', (brandQuery) => {
-                        brandQuery.whereRaw('LOWER(name) LIKE ?', [`%${searchTerm}%`])
+                        brandQuery.whereRaw('LOWER(name) LIKE ?', [searchTerm])
                     })
                     .orWhereHas('category', (categoryQuery) => {
-                        categoryQuery.whereRaw('LOWER(name) LIKE ?', [`%${searchTerm}%`])
+                        categoryQuery.whereRaw('LOWER(name) LIKE ?', [searchTerm])
                     })
             })
         }
 
-        // Filtro específico por marca
+        // Specific filters (will be applied with AND)
         if (brand) {
-            query = query.whereHas('brand', (brandQuery) => {
+            query.whereHas('brand', (brandQuery) => {
                 brandQuery.whereRaw('LOWER(name) LIKE ?', [`%${brand.toLowerCase()}%`])
             })
         }
 
-        // Filtro específico por modelo (buscar en name o description)
         if (model) {
-            query = query.where((subQuery) => {
+            query.where((subQuery) => {
                 subQuery
                     .whereRaw('LOWER(name) LIKE ?', [`%${model.toLowerCase()}%`])
                     .orWhereRaw('LOWER(description) LIKE ?', [`%${model.toLowerCase()}%`])
             })
         }
 
-        // Filtro específico por categoría
         if (category) {
-            query = query.whereHas('category', (categoryQuery) => {
+            query.whereHas('category', (categoryQuery) => {
                 categoryQuery.whereRaw('LOWER(name) LIKE ?', [`%${category.toLowerCase()}%`])
             })
         }
 
+        // --- NEW: Logic to filter by attributes (variants) ---
+        // Expects a format like: attributes=RAM:16GB,Storage:1TB SSD
+        if (attributes && typeof attributes === 'string') {
+            const attributePairs = attributes.split(',');
+
+            attributePairs.forEach(pair => {
+                const [key, value] = pair.split(':');
+                if (key && value) {
+                    query.whereHas('attributes', (attributeQuery) => {
+                        attributeQuery
+                            .whereRaw('LOWER(attribute_name) LIKE ?', [`%${key.toLowerCase().trim()}%`])
+                            .andWhereRaw('LOWER(attribute_value) LIKE ?', [`%${value.toLowerCase().trim()}%`]);
+                    });
+                }
+            });
+        }
+        // --- END OF NEW LOGIC ---
+
         const products = await query.paginate(1, 10)
 
-        // Si no se encontraron productos, devolver mensaje útil
+        const searchParams = { brand, model, q, category, attributes }
+
         if (products.length === 0) {
             return response.ok({
+                message: 'No products were found matching the search criteria.',
                 products: [],
-                message: 'No se encontraron productos que coincidan con los criterios de búsqueda.',
-                search_params: { brand, model, q, category }
+                search_params: searchParams
             })
         }
 
         return response.ok({
             products: products,
-            search_params: { brand, model, q, category }
+            search_params: searchParams
         })
     }
 
+
     /**
-     * Obtiene productos de una marca específica con todas sus características.
-     * Útil para consultas del chatbot como "¿Qué características tienen los Dell?"
+     * Gets products of a specific brand with all their features.
      * GET /products/by-brand/:brandName
      */
     public async getByBrand({ params, response }: HttpContext) {
@@ -158,12 +167,11 @@ export default class ProductsController {
         if (products.length === 0) {
             return response.ok({
                 products: [],
-                message: `No se encontraron productos de la marca "${params.brandName}".`,
+                message: `No products were found for the brand "${params.brandName}".`,
                 brand_searched: params.brandName
             })
         }
 
-        // Organizar la respuesta de manera más amigable para el chatbot
         const formattedProducts = products.map(product => ({
             id: product.id,
             name: product.name,
@@ -177,7 +185,6 @@ export default class ProductsController {
                 name: attr.attributeName,
                 value: attr.attributeValue
             })) || [],
-            // Crear un resumen textual de características principales
             summary: this.generateProductSummary(product)
         }))
 
@@ -189,57 +196,23 @@ export default class ProductsController {
     }
 
     /**
-     * Método auxiliar para generar un resumen de características del producto
-     * que sea fácil de leer para el chatbot
+     * Helper method to generate a product feature summary.
      */
     private generateProductSummary(product: Product): string {
         const attributes = product.attributes || []
-
-        // Buscar atributos clave comunes en computadores
         const keyAttributes = {
-            procesador: attributes.find(attr =>
-                attr.attributeName.toLowerCase().includes('procesador') ||
-                attr.attributeName.toLowerCase().includes('cpu') ||
-                attr.attributeName.toLowerCase().includes('processor')
-            ),
-            ram: attributes.find(attr =>
-                attr.attributeName.toLowerCase().includes('ram') ||
-                attr.attributeName.toLowerCase().includes('memoria')
-            ),
-            almacenamiento: attributes.find(attr =>
-                attr.attributeName.toLowerCase().includes('almacenamiento') ||
-                attr.attributeName.toLowerCase().includes('disco') ||
-                attr.attributeName.toLowerCase().includes('ssd') ||
-                attr.attributeName.toLowerCase().includes('hdd')
-            ),
-            pantalla: attributes.find(attr =>
-                attr.attributeName.toLowerCase().includes('pantalla') ||
-                attr.attributeName.toLowerCase().includes('screen') ||
-                attr.attributeName.toLowerCase().includes('display')
-            )
+            processor: attributes.find(attr => /processor|cpu/i.test(attr.attributeName)),
+            ram: attributes.find(attr => /ram|memory/i.test(attr.attributeName)),
+            storage: attributes.find(attr => /storage|disk|ssd|hdd/i.test(attr.attributeName)),
+            screen: attributes.find(attr => /screen|display/i.test(attr.attributeName))
         }
 
         const summaryParts = []
+        if (keyAttributes.processor) summaryParts.push(`Processor: ${keyAttributes.processor.attributeValue}`)
+        if (keyAttributes.ram) summaryParts.push(`RAM: ${keyAttributes.ram.attributeValue}`)
+        if (keyAttributes.storage) summaryParts.push(`Storage: ${keyAttributes.storage.attributeValue}`)
+        if (keyAttributes.screen) summaryParts.push(`Screen: ${keyAttributes.screen.attributeValue}`)
 
-        if (keyAttributes.procesador) {
-            summaryParts.push(`Procesador: ${keyAttributes.procesador.attributeValue}`)
-        }
-        if (keyAttributes.ram) {
-            summaryParts.push(`RAM: ${keyAttributes.ram.attributeValue}`)
-        }
-        if (keyAttributes.almacenamiento) {
-            summaryParts.push(`Almacenamiento: ${keyAttributes.almacenamiento.attributeValue}`)
-        }
-        if (keyAttributes.pantalla) {
-            summaryParts.push(`Pantalla: ${keyAttributes.pantalla.attributeValue}`)
-        }
-
-        return summaryParts.length > 0 ? summaryParts.join(', ') : 'Características disponibles en detalle.'
+        return summaryParts.length > 0 ? summaryParts.join(', ') : 'Detailed specifications available.'
     }
-
-    // public getDataConvertation({request}): HttpContext {
-    //     const data = request.output;
-    //     re
-
-    // }
 }

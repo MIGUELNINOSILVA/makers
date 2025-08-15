@@ -4,39 +4,6 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "chat",
-        "options": {
-          "rawBody": true
-        }
-      },
-      "id": "4cd50549-28fb-4df8-b219-70299bc0c531",
-      "name": "Chat Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        -208
-      ],
-      "webhookId": "makers-tech-chat"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"success\": true,\n  \"response\": \"{{ $json.choices[0].message.content }}\",\n  \"timestamp\": \"{{ new Date().toISOString() }}\",\n  \"user_id\": {{ $('Chat Webhook').first().json.body.user_id || 1 }},\n  \"session_id\": \"{{ $('Chat Webhook').first().json.body.session_id || 'default' }}\",\n  \"recommendations\": {{ JSON.stringify($('Process Inventory & User Data').first().json.recommendations) }}\n}",
-        "options": {}
-      },
-      "id": "4a991d77-497a-4815-863f-cac81e922b96",
-      "name": "Send Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        880,
-        64
-      ]
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
         "path": "f2e5a7b8-a1b9-4d3c-8e6f-7d1a9b2c3d4e",
         "options": {}
       },
@@ -44,86 +11,11 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -784,
-        192
+        -736,
+        400
       ],
       "webhookId": "f2e5a7b8-a1b9-4d3c-8e6f-7d1a9b2c3d4e",
-      "id": "0e0c0360-7666-436a-8a5b-87525f4eba71"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "{{$json.body.message}}",
-              "operation": "contains",
-              "value2": "cuántos"
-            }
-          ]
-        }
-      },
-      "name": "Detectar Intención",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        112,
-        192
-      ],
-      "id": "e9a192ce-aa97-4bda-ac1e-2a4961567c9c"
-    },
-    {
-      "parameters": {
-        "url": "https://tu-backend-adonis.com/api/inventory/summary",
-        "options": {}
-      },
-      "name": "Llamar API Inventario",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        624,
-        64
-      ],
-      "id": "a481e848-d686-4e20-8d68-63c15e7a09eb"
-    },
-    {
-      "parameters": {
-        "url": "https://tu-backend-adonis.com/api/products/details?name={{ $json.body.product_name }}",
-        "options": {}
-      },
-      "name": "Llamar API Detalles",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        416,
-        272
-      ],
-      "id": "cedd44a1-5b04-44a6-8587-8cbfd923a713"
-    },
-    {
-      "parameters": {
-        "jsCode": "const data = $json.data;\nconst responseText = `En este momento, tenemos ${data.total_computers} computadores; ${data.hp_count} son HP, ${data.dell_count} son Dell, y ${data.apple_count} son Apple. ¿Cuál te gustaría ver?`;\nreturn { response: responseText };"
-      },
-      "name": "Formatear Respuesta Inventario",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        880,
-        64
-      ],
-      "id": "f6200eb4-45c0-4172-b00c-e75491feea43"
-    },
-    {
-      "parameters": {
-        "jsCode": "const product = $json.data;\nconst responseText = `El computador ${product.name} tiene un precio de $${product.price}. Cuenta con las siguientes características: ${product.features}.`;\nreturn { response: responseText };"
-      },
-      "name": "Formatear Respuesta Detalles",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        672,
-        272
-      ],
-      "id": "b6e1a59c-c1f5-45ea-bf3e-0a41f7ae1cb1"
+      "id": "5895a846-a81a-4d3a-aa69-730e91456885"
     },
     {
       "parameters": {
@@ -134,10 +26,10 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        -576,
-        192
+        -528,
+        400
       ],
-      "id": "21729844-4c4e-46a7-9c3d-fd1779865a97",
+      "id": "06faf6a2-11cf-473b-8b19-e16f070cf0e0",
       "name": "AI Agent"
     },
     {
@@ -153,14 +45,14 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        -720,
-        400
+        -672,
+        608
       ],
-      "id": "9bc123af-a4c2-410c-abf3-4d7a6397b321",
+      "id": "e41bcafa-0a24-445b-b935-ca2d5b7a2df2",
       "name": "OpenAI Chat Model",
       "credentials": {
         "openAiApi": {
-          "id": "lBlJeexr2DYsgBa4",
+          "id": "fw6vbmjQFD2qCbb1",
           "name": "OpenAi account"
         }
       }
@@ -174,10 +66,10 @@
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        -496,
-        416
+        -448,
+        624
       ],
-      "id": "07cec60e-0c65-4c20-bed1-fef4e1b5fa51",
+      "id": "50df99db-5eb5-4f97-b579-aa6e9997f627",
       "name": "Simple Memory"
     },
     {
@@ -189,10 +81,10 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        -272,
-        384
+        -224,
+        592
       ],
-      "id": "d5163007-a79b-49b1-afd1-c99ece096c31",
+      "id": "f48ac564-a843-48bb-8f31-65aba78b08ac",
       "name": "Peticion resumen inventario"
     },
     {
@@ -205,6 +97,10 @@
             {
               "name": "message",
               "value": "={{ $json.output }}"
+            },
+            {
+              "name": "session_id",
+              "value": "={{ $('Recibir Mensaje de Chat').item.json.body.session_id }}"
             }
           ]
         },
@@ -213,64 +109,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -224,
-        225.38712366938674
+        -80,
+        400
       ],
-      "id": "769d3a78-2754-4cb2-b106-9af0fc94784a",
+      "id": "b5725a72-ac32-42af-aae5-f724e31ed1bb",
       "name": "HTTP Request"
     }
   ],
   "pinData": {},
   "connections": {
-    "Chat Webhook": {
-      "main": [
-        [
-          {
-            "node": "Send Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Recibir Mensaje de Chat": {
       "main": [
         [
           {
             "node": "AI Agent",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Detectar Intención": {
-      "main": [
-        [
-          {
-            "node": "Llamar API Inventario",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Llamar API Inventario": {
-      "main": [
-        [
-          {
-            "node": "Formatear Respuesta Inventario",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Llamar API Detalles": {
-      "main": [
-        [
-          {
-            "node": "Formatear Respuesta Detalles",
             "type": "main",
             "index": 0
           }
@@ -326,11 +178,11 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "240f178c-3cbe-4fe9-bfd2-d2528a425350",
+  "versionId": "901126a0-e321-46a3-861a-e212d9954a47",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "9d0ad981c77c305f4b6d9175c730e87c60558b68ae40f554894922c86a0fa30c"
+    "instanceId": "52afe48a5eb98cb4ebd44f3235181c15eb3fbb2963c7a9125925117a67737e3e"
   },
-  "id": "RCwvJkIfkVfkEqgE",
+  "id": "goug50vRkSRRJnjv",
   "tags": []
 }
